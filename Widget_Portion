@@ -1,0 +1,430 @@
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageTk
+import pandas as pd
+from tkcalendar import DateEntry
+import random
+
+#Load CSVs
+data = pd.read_csv("data.csv", dtype=str)
+history = pd.read_csv("history.csv")
+
+#Load or create users
+try:
+    users = pd.read_csv("users.csv", dtype=str)
+except:
+    users = pd.DataFrame(columns=["username", "password"])
+
+#Fix CSV
+required_cols = ['phone','type','company','status','date_applied','last_update']
+for col in required_cols:
+    if col not in data.columns:
+        data[col] = ''
+
+data = data.fillna('')
+
+valid_status = ["applied","interview","offered","denied","onboarding"]
+data['status'] = data['status'].apply(lambda x: x if x in valid_status else 'applied')
+
+#MAIN WINDOW
+root = tk.Tk()
+root.title("Smart Call Widget")
+square_size = 400
+slide_frame = tk.Frame(root, width=square_size, height=square_size)
+slide_frame.place(x=0, y=0)
+
+slides = []
+logged_in = False  #lock other slides until login
+
+# SLIDE 1 This is about the login section
+slide1 = tk.Frame(slide_frame, width=square_size, height=square_size)
+slides.append(slide1)
+
+img = Image.open("image4.jpg").resize((square_size, square_size))
+tk_img = ImageTk.PhotoImage(img)
+
+canvas = tk.Canvas(slide1, width=square_size, height=square_size)
+canvas.pack()
+canvas.create_image(0, 0, anchor='nw', image=tk_img)
+canvas.create_rectangle(0, 0, square_size, 40, fill="#3b775e")
+canvas.create_text(15, 20, text="Job Application Tracker",
+                   font=('Courier New', 16, 'bold'), fill='White', anchor='w')
+
+mode = tk.StringVar(value="menu")
+username_var = tk.StringVar()
+password_var = tk.StringVar()
+
+entry_user = tk.Entry(slide1, textvariable=username_var)
+entry_pass = tk.Entry(slide1, textvariable=password_var, show="*")
+
+def draw_login():
+    canvas.delete("ui")
+    entry_user.place_forget()
+    entry_pass.place_forget()
+
+    if mode.get() == "menu":
+        canvas.create_text(200, 150, text="Welcome",
+                           font=('Courier New', 26, 'bold'), tags="ui", fill="#fcfcfc")
+        canvas.create_text(200, 200, text="Login",
+                           font=('Courier New', 16), tags="ui", fill="#18221d")
+        canvas.create_text(200, 240, text="Sign Up",
+                           font=('Courier New', 16), tags="ui", fill="#18221d")
+
+    else:
+        canvas.create_text(200, 120, text=mode.get().capitalize(),
+                           font=('Courier New', 16, 'bold'), tags="ui")
+        canvas.create_text(120, 170, text="User:", tags="ui")
+        entry_user.place(x=160, y=160)
+        canvas.create_text(120, 210, text="Pass:", tags="ui")
+        entry_pass.place(x=160, y=200)
+
+# Button properties
+btn_x, btn_y = 152, 280
+btn_width, btn_height = 100, 20
+btn_fill = "#3b775e" 
+btn_text_color = "white"
+
+# button on canvas
+btn_rect = canvas.create_rectangle(btn_x, btn_y, btn_x + btn_width, btn_y + btn_height, fill=btn_fill, outline="")
+btn_label = canvas.create_text(btn_x + btn_width/2, btn_y + btn_height/2, text="Enter", fill=btn_text_color, font=("Courier New", 12, "bold"))
+
+def click(event):
+    global users, logged_in
+    if mode.get() == "menu":
+        if 170 <= event.x <= 230 and 190 <= event.y <= 210:
+            mode.set("login")
+            draw_login()
+        elif 160 <= event.x <= 240 and 230 <= event.y <= 250:
+            mode.set("signup")
+            draw_login()
+    else:
+        
+        if btn_x <= event.x <= btn_x + btn_width and btn_y <= event.y <= btn_y + btn_height:
+            user = username_var.get()
+            pw = password_var.get()
+
+            if mode.get() == "login":
+                match = users[(users['username'] == user) & (users['password'] == pw)]
+                if not match.empty:
+                    messagebox.showinfo("Success", "Logged in!")
+                    logged_in = True  #unlocks slides
+                    go(1)
+                else:
+                    messagebox.showerror("Error", "Invalid login")
+            else:
+                if user in users['username'].values:
+                    messagebox.showwarning("Error", "Username exists")
+                    return
+                new_user = pd.DataFrame([[user, pw]], columns=["username","password"])
+                users = pd.concat([users, new_user], ignore_index=True)
+                users.to_csv("users.csv", index=False)
+                messagebox.showinfo("Success", "Account created!")
+                mode.set("login")
+                draw_login()
+
+canvas.bind("<Button-1>", click)
+draw_login()
+
+# SLIDE 2
+
+slide2 = tk.Frame(slide_frame, width=square_size, height=square_size, bg='#3b775e') 
+slides.append(slide2)
+
+tk.Label(slide2, text="Add Application", font=('Courier New', 22, 'bold'), bg='#3b775e', fg="#15251B").place(x=54, y=30)
+
+phone_var = tk.StringVar()
+company_var = tk.StringVar()
+
+# Labels with background color only
+tk.Label(slide2, text="Phone", bg='#3b775e').place(x=60, y=100)
+tk.Entry(slide2, textvariable=phone_var).place(x=160, y=100)
+
+tk.Label(slide2, text="Company", bg='#3b775e').place(x=60, y=140)
+tk.Entry(slide2, textvariable=company_var).place(x=160, y=140)
+
+tk.Label(slide2, text="Applied Date", bg='#3b775e').place(x=60, y=180)
+date_picker = DateEntry(slide2, width=12)
+date_picker.place(x=160, y=180)
+
+def save_application():
+    global data
+    new = pd.DataFrame([[phone_var.get(),'job',company_var.get(),'applied',date_picker.get(),'']],
+                       columns=required_cols)
+    data = pd.concat([data, new], ignore_index=True)
+    data.to_csv("data.csv", index=False)
+    messagebox.showinfo("Saved", "Application added!")
+
+# Adding the Save button back
+tk.Button(slide2, text="Save", command=save_application, bg="#3b775e", fg="black").place(x=160, y=230)
+
+# SLIDE 3 this is where the update section is
+slide3 = tk.Frame(slide_frame, width=square_size, height=square_size, bg='#3b775e')
+slides.append(slide3)
+
+# Title label with background
+tk.Label(slide3, text="Update Application Info", font=('Courier New', 19, 'bold'),
+         bg='#3b775e', fg="#15251B").place(x=20, y=20)
+
+# Input fields
+update_company = tk.StringVar()
+update_role = tk.StringVar()
+status_var = tk.StringVar(value="applied")
+note_var = tk.StringVar()
+
+tk.Label(slide3, text="Company", bg='#3b775e').place(x=40, y=80)
+tk.Entry(slide3, textvariable=update_company).place(x=150, y=80)
+
+tk.Label(slide3, text="Role", bg='#3b775e').place(x=40, y=120)
+tk.Entry(slide3, textvariable=update_role).place(x=150, y=120)
+
+tk.Label(slide3, text="Status", bg='#3b775e').place(x=40, y=160)
+options = ["applied","interview","offered","denied","onboarding"]
+tk.OptionMenu(slide3, status_var, *options).place(x=150, y=155)
+
+tk.Label(slide3, text="Update Date", bg='#3b775e').place(x=40, y=200)
+update_date = DateEntry(slide3, width=12)
+update_date.place(x=150, y=200)
+
+tk.Label(slide3, text="Note", bg='#3b775e').place(x=40, y=240)
+tk.Entry(slide3, textvariable=note_var, width=25).place(x=150, y=240)
+
+# Updatinf Info Function 
+def update_info():
+    global data
+    company = update_company.get().strip().lower()
+    role = update_role.get().strip()
+    note = note_var.get().strip()
+    data['company_lower'] = data['company'].str.lower()
+    
+    if company in data['company_lower'].values:
+        idx = data[data['company_lower'] == company].index[0]
+        data.at[idx, 'status'] = status_var.get()
+        data.at[idx, 'last_update'] = update_date.get()
+        data.at[idx, 'role'] = role
+        data.at[idx, 'note'] = note
+        data.drop(columns=['company_lower'], inplace=True)
+        data.to_csv("data.csv", index=False)
+        messagebox.showinfo("Updated", "Application info updated!")
+        if status_var.get() == "offered":
+            show_opportunity_popup(company)
+    else:
+        messagebox.showwarning("Error", "Company not found")
+
+tk.Button(slide3, text="Update Info", bg="#3b775e", fg="black", command=update_info).place(x=130, y=280)
+
+# Resizable Pop-up Report
+def show_report():
+    try:
+        df = pd.read_csv("data.csv", dtype=str)
+    except FileNotFoundError:
+        messagebox.showwarning("Error", "No data available")
+        return
+
+    df = df.fillna('')
+
+    # Column widths for alignment
+    col_widths = {
+        "date_applied": 12,
+        "company": 20,
+        "role": 20,
+        "status": 15,
+        "last_update": 15,
+        "note": 25
+    }
+
+    # Header
+    header = f"{'Date':<{col_widths['date_applied']}}" \
+             f"{'Company':<{col_widths['company']}}" \
+             f"{'Role':<{col_widths['role']}}" \
+             f"{'Status':<{col_widths['status']}}" \
+             f"{'Last Update':<{col_widths['last_update']}}" \
+             f"{'Note':<{col_widths['note']}}"
+
+    report_lines = [header, "-"*110]
+
+    # Data rows
+    for _, row in df.iterrows():
+        line = f"{row.get('date_applied',''):<{col_widths['date_applied']}}" \
+               f"{row.get('company',''):<{col_widths['company']}}" \
+               f"{row.get('role',''):<{col_widths['role']}}" \
+               f"{row.get('status',''):<{col_widths['status']}}" \
+               f"{row.get('last_update',''):<{col_widths['last_update']}}" \
+               f"{row.get('note',''):<{col_widths['note']}}"
+        report_lines.append(line)
+
+    report_text = "\n".join(report_lines)
+
+    # Create resizable popup window
+    report_win = tk.Toplevel(root)
+    report_win.title("Application Report")
+    report_win.geometry("900x500")  # bigger window so the alignment finally looks good
+    report_win.minsize(700, 400)    # resizable limits
+
+    # Text widget with monospaced font for proper alignment
+    txt = tk.Text(report_win, font=("Courier New", 10), wrap="none")
+    txt.pack(expand=True, fill="both")
+
+    # Add horizontal and vertical scrollbars
+    x_scroll = tk.Scrollbar(report_win, orient='horizontal', command=txt.xview)
+    x_scroll.pack(side='bottom', fill='x')
+    y_scroll = tk.Scrollbar(report_win, orient='vertical', command=txt.yview)
+    y_scroll.pack(side='right', fill='y')
+    txt.configure(xscrollcommand=x_scroll.set, yscrollcommand=y_scroll.set)
+
+    txt.insert(tk.END, report_text)
+    txt.config(state='disabled')  # make read-only
+
+# Report button
+tk.Button(slide3, text="Report", bg="#3b775e", fg="black", command=show_report).place(x=230, y=280)
+
+#  SLIDE 4 area where the dashboard and the numbers in flowchart with top banner are
+
+slide4 = tk.Frame(slide_frame, width=square_size, height=square_size, bg="#53816d")
+slides.append(slide4)
+
+canvas4 = tk.Canvas(slide4, width=square_size, height=square_size, bg="#53816d")
+canvas4.pack()
+
+def draw_dashboard():
+    canvas4.delete("all")
+    try:
+        data = pd.read_csv("data.csv", dtype=str)
+    except FileNotFoundError:
+        data = pd.DataFrame(columns=["status", "company", "last_update"])
+    data = data.fillna('')
+
+    #calculate totals
+    total = len(data)
+    interviews = len(data[data["status"] == "interview"])
+    rejected = len(data[data["status"] == "denied"])
+    offered = len(data[data["status"] == "offered"])
+    applied = len(data[data["status"] == "applied"])
+
+    # Top Banner 
+    banner_height = 70
+    canvas4.create_rectangle(0, 0, square_size, banner_height, fill="#254236", outline="")
+
+    # KPIs as percentage-only blocks with labels 
+    kpi_width = 80
+    kpi_height = 40
+    kpi_spacing = 15
+    x_start = 10
+    y_start = 15  
+
+    kpis = [
+        ("Total", applied, "#374F47"),
+        ("Interview", interviews, "#839958"),
+        ("Offers", offered, "#F7F4D5"),
+        ("Rejected", rejected, "#EC9C9D")
+    ]
+
+    for i, (label, val, color) in enumerate(kpis):
+        x0 = x_start + i*(kpi_width + kpi_spacing)
+        y0 = y_start
+        x1 = x0 + kpi_width
+        y1 = y0 + kpi_height
+        canvas4.create_rectangle(x0, y0, x1, y1, fill=color, outline="", width=2)
+        percent = f"{(val/total*100):.1f}%" if total > 0 else "0%"
+
+        # KPI label 
+        canvas4.create_text((x0+x1)//2, y0 + 12, text=label, font=("Arial", 8, "bold"), fill="black")
+        canvas4.create_text((x0+x1)//2, y0 + 28, text=f"{percent}", font=("Arial", 10, "bold"), fill="black")
+
+    # Flowchart blocks
+    block_width, block_height = 80, 35
+    gap = 50
+    x_start, y_start = 30, banner_height + 30  # starting below the banner
+
+    # Applied
+    canvas4.create_rectangle(x_start, y_start, x_start+block_width, y_start+block_height, fill="#374F47", outline="black")
+    canvas4.create_text(x_start+block_width/2, y_start+block_height/2,
+                        text=f"Applied\n{applied}", font=("Arial", 8))
+
+    # Arrow to Interview
+    x_interview = x_start + block_width + gap
+    canvas4.create_line(x_start+block_width, y_start+block_height/2, x_interview, y_start+block_height/2, arrow=tk.LAST)
+
+    # Interview
+    canvas4.create_rectangle(x_interview, y_start, x_interview+block_width, y_start+block_height, fill="#839958", outline="black")
+    canvas4.create_text(x_interview+block_width/2, y_start+block_height/2,
+                        text=f"Interview\n{interviews}", font=("Arial", 8))
+
+    # Arrow to Offer and Denied
+    x_offer = x_interview + block_width + gap
+    y_offer = y_start
+    canvas4.create_line(x_interview+block_width, y_start+block_height/2, x_offer, y_start+block_height/2 - 10, arrow=tk.LAST)
+    canvas4.create_line(x_interview+block_width, y_start+block_height/2, x_offer, y_start+block_height/2 + 10, arrow=tk.LAST)
+
+    # Offer
+    canvas4.create_rectangle(x_offer, y_offer-10, x_offer+block_width, y_offer+block_height-10, fill="#F7F4D5", outline="black")
+    canvas4.create_text(x_offer+block_width/2, y_offer+block_height/2-10,
+                        text=f"Offered\n{offered}", font=("Arial", 8))
+
+    # Denied
+    canvas4.create_rectangle(x_offer, y_offer+40, x_offer+block_width, y_offer+block_height+40, fill="#EC9C9D", outline="black")
+    canvas4.create_text(x_offer+block_width/2, y_offer+block_height/2+40,
+                        text=f"Rejected\n{rejected}", font=("Arial", 8))
+
+    #Bottom Mini dashboard 
+    bottom_y = y_offer + 100
+    bar_width = 140
+    bar_height = 12
+    spacing = 8
+    x_left = 20
+
+    status_list = [("Applied", applied, "#374F47"),
+                   ("Interview", interviews, "#839958"),
+                   ("Offered", offered, "#F7F4D5"),
+                   ("Rejected", rejected, "#EC9C9D")]
+
+    canvas4.create_text(70, bottom_y-10, text="Status Overview", font=("Arial", 10, "bold"))
+
+    for i, (label, val, color) in enumerate(status_list):
+        y_pos = bottom_y + i*(bar_height+spacing)
+        canvas4.create_text(x_left, y_pos + bar_height/2, text=f"{label}", anchor="w", font=("Arial", 9))
+        canvas4.create_rectangle(x_left+80, y_pos, x_left+80+bar_width, y_pos+bar_height, fill="#eee", outline="")
+        fill_width = (val/total*bar_width) if total > 0 else 0
+        canvas4.create_rectangle(x_left+80, y_pos, x_left+80+fill_width, y_pos+bar_height, fill=color, outline="")
+
+    #Recent Updates
+    last_updates = data.sort_values("last_update", ascending=False).head(3) if "last_update" in data.columns else pd.DataFrame()
+    updates_text = "\n".join([f"{row['company']} → {row['status']} ({row['last_update']})" 
+                              for _, row in last_updates.iterrows()]) if not last_updates.empty else "No recent updates"
+    canvas4.create_text(200, bottom_y + 95, text="Recent Updates:\n"+updates_text,
+                        font=("Arial", 9), anchor="n", justify="center")
+
+# Drawing the finalized dashboard
+draw_dashboard()
+    
+# NAVIGATION
+def show_slide(i):
+    global logged_in
+    if not logged_in and i > 0:
+        messagebox.showwarning("Locked", "Please login first!")
+        return
+    for s in slides:
+        s.place_forget()
+    slides[i].place(x=0, y=0)
+
+nav = tk.Frame(root, height=10, bg='lightgrey')
+nav.place(x=0, y=square_size-10, width=square_size)
+indicator = tk.Frame(nav, bg='pink', height=10, width=square_size//4)
+indicator.place(x=0, y=0)
+
+def go(i):
+    show_slide(i)
+    indicator.place(x=i*(square_size//4), y=0)
+    if i == 3:
+        draw_dashboard()
+
+def nav_click(e):
+    idx = int(e.x // (square_size//4))
+    go(idx)
+
+nav.bind("<Button-1>", nav_click)
+
+# START 
+show_slide(0)
+root.mainloop()
+
+
